@@ -1,0 +1,16 @@
+# Build toolchain (downloaded locally, not committed)
+tools/
+local.properties
+
+# Build outputs
+build/
+**/build/
+.gradle/
+
+# IDE
+.idea/
+*.iml
+
+# Agent session data & phone screenshots (may contain credentials)
+.cam-images/
+.agents/

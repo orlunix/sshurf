@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'dev.sshbrowser'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'dev.sshbrowser'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.3-m1'
+    }
+}
+
+dependencies {
+    // SSH client (maintained fork of JSch).
+    implementation 'com.github.mwiede:jsch:2.28.0'
+    // ProxyController for pointing WebView at the local SOCKS5 proxy.
+    implementation 'androidx.webkit:webkit:1.10.0'
+    // Keystore-backed encrypted storage for credentials and the private key.
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+}
