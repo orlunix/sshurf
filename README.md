@@ -1,6 +1,8 @@
-# Android VPN 自动化
+# sshurf
 
-通过 Android 自动化简化公司网络访问的工作区。技术选型已定：**原生 App**（2026-08-08）。
+带 SSH Socket 转发能力的 Android 浏览器：自带 WebView，全部流量经 SSH 动态转发（`ssh -D` 等价）出网，不用 VpnService、不需要 root。
+
+本仓库同时包含一个早期的 GlobalProtect 一键连接实验模块（`app/`）。
 
 ## 模块
 

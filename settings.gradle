@@ -17,6 +17,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = 'vpn-auto'
+rootProject.name = 'sshurf'
 include ':app'
 include ':ssh-browser'
