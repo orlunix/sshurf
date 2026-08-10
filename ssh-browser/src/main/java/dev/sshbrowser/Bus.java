@@ -75,4 +75,10 @@ public final class Bus {
             if (l != null) l.onLog(line);
         });
     }
+
+    public static void clear() {
+        synchronized (history) {
+            history.clear();
+        }
+    }
 }

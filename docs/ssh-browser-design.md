@@ -28,18 +28,31 @@
 
 ## 2. 模块划分
 
+> M2（2026-08-09）重构为「SSH 网络应用门户」：Index 为默认首页（书签即应用），Browser 全屏 + 悬浮按钮回 Index，Config 支持多份 SSH 配置（单选启用）+ 全局密钥，Log 独立全屏页。转发核心（Service/SOCKS/加密存储）未动。
+
 ```
 ssh-browser/src/main/java/dev/sshbrowser/
-├── MainActivity.java        # 配置（host/port/user/密码/私钥口令）+ 密钥生成/导入 + 连接/断开 + 入口
-├── BrowserActivity.java     # WebView + ProxyController 挂 SOCKS5 代理 + 地址栏
+├── IndexActivity.java       # 默认首页：状态条 + 网址/搜索 + 书签网格；点书签自动连隧道再打开
+├── BrowserActivity.java     # 全屏 WebView + ProxyController；唯一 FAB = 回 Index；本地错误页
+├── ConfigActivity.java      # 多份 SSH 配置（单选启用）；认证在编辑弹窗内二选一：密码 或 私钥（导入/生成/复制公钥）
+├── LogActivity.java         # 全屏日志：✓绿/✗红 着色、复制全部、清空
 ├── SshTunnelService.java    # 前台 Service：JSch Session 管理、自动重连、挂 Socks5Server
-├── Socks5Server.java        # 极简 SOCKS5 服务端（约 150 行）：握手 + CONNECT → direct-tcpip
-├── KeyManager.java          # JSch 生成 RSA-4096 密钥对，私钥入加密存储，公钥展示/复制
-├── SshConfig.java           # EncryptedSharedPreferences 读写（主密钥走 Android Keystore）
-└── Bus.java                 # 状态/日志回调（连接状态 → MainActivity）
+├── Socks5Server.java        # 极简 SOCKS5：握手 + CONNECT → direct-tcpip（异步 open 轮询确认）
+├── Profiles.java            # 多份 SSH 配置存储（加密），含旧单配置迁移
+├── BookmarkStore.java       # 书签（名称+URL），普通 SharedPreferences
+├── KeyManager.java          # JSch 生成 RSA-4096 密钥对
+├── SshConfig.java           # 全局密钥对/口令的加密存储（主密钥走 Keystore）
+└── Bus.java                 # 状态/日志总线：300 条环形缓冲，重连回放
 ```
 
 依赖：`com.github.mwiede:jsch`（SSH）、`androidx.webkit:webkit`（ProxyController）、`androidx.security:security-crypto`（加密存储）。
+
+### UI 约定（M2 定稿）
+
+- 冷启动永远进 Index；后台切回由系统恢复原页面；首次安装无配置直接落 Config
+- 网页内默认全屏（隐藏系统栏），唯一控件是右下角 FAB，点按 = 回 Index
+- Config 入口在 Index 右上角齿轮；Log 入口在 Config 内
+- 网站密码不自建密码库，走系统 Autofill（WebView 原生支持）
 
 ## 3. 安全设计（继承 AGENTS.md 硬约束）
 

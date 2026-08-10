@@ -10,8 +10,15 @@ android {
         applicationId 'dev.sshbrowser'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '0.1.3-m1'
+        versionCode 16
+        versionName '0.0.15'
+    }
+
+    // Versioned artifact name: sshurf-0.0.x.apk (uploaded to netdisk per release, never overwritten)
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "sshurf-${defaultConfig.versionName}.apk"
+        }
     }
 }
 

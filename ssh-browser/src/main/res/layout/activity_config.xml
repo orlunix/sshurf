@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="SSH 服务器（点按启用，长按编辑）"
+        android:textStyle="bold" />
+
+    <ListView
+        android:id="@+id/lv_profiles"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp" />
+
+    <Button
+        android:id="@+id/btn_add_profile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="＋ 添加服务器" />
+
+    <Button
+        android:id="@+id/btn_view_log"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="查看日志" />
+</LinearLayout>

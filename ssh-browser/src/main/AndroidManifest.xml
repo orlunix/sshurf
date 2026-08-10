@@ -7,19 +7,33 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="SSH Browser"
+        android:label="sshurf"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
-            android:name=".MainActivity"
-            android:exported="true">
+            android:name=".IndexActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <activity android:name=".BrowserActivity" />
+        <activity
+            android:name=".BrowserActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".ConfigActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".LogActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".RecentActivity"
+            android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".SshTunnelService"

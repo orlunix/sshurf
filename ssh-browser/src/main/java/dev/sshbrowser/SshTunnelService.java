@@ -95,18 +95,21 @@ public final class SshTunnelService extends Service {
     }
 
     private void connectOnce() throws Exception {
-        SshConfig cfg = SshConfig.load(this);
-        if (!cfg.isComplete()) throw new IllegalStateException("配置不完整，请先填写主机/用户并生成密钥或填密码");
+        Profiles.Profile p = Profiles.enabled(this);
+        if (p == null || p.host.isEmpty() || p.user.isEmpty()) {
+            throw new IllegalStateException("没有可用的 SSH 配置，请先在设置里添加");
+        }
+        if (!p.hasKey() && p.password.isEmpty()) {
+            throw new IllegalStateException("「" + p.name + "」未设置认证方式：请导入/生成私钥或填密码");
+        }
 
         JSch jsch = new JSch();
-        if (cfg.hasKey()) {
-            byte[] pass = cfg.keyPassphrase.isEmpty()
-                    ? null : cfg.keyPassphrase.getBytes(StandardCharsets.UTF_8);
-            jsch.addIdentity("device-key",
-                    cfg.privateKeyPem.getBytes(StandardCharsets.US_ASCII), null, pass);
+        if (p.hasKey()) {
+            byte[] pass = p.keyPass.isEmpty() ? null : p.keyPass.getBytes(StandardCharsets.UTF_8);
+            jsch.addIdentity("device-key", p.privKey.getBytes(StandardCharsets.US_ASCII), null, pass);
         }
-        Session s = jsch.getSession(cfg.user, cfg.host, cfg.port);
-        if (!cfg.password.isEmpty()) s.setPassword(cfg.password);
+        Session s = jsch.getSession(p.user, p.host, p.port);
+        if (!p.password.isEmpty()) s.setPassword(p.password);
         // TODO(M2): TOFU host key verification; M1 accepts any and logs the fingerprint.
         s.setConfig("StrictHostKeyChecking", "no");
         s.setServerAliveInterval(30000);
@@ -115,7 +118,7 @@ public final class SshTunnelService extends Service {
 
         try {
             String fp = s.getHostKey().getFingerPrint(jsch);
-            Bus.log("服务器指纹: " + fp);
+            Bus.log(p.name + " 指纹: " + fp);
         } catch (Exception ignored) {
         }
         session = s;
