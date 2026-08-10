@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "com.sshurf.desktop",
-    "productName": "sshurf",
+    "productName": "sshurf desktop",
     "files": [
       "**/*",
       "!dist/**"
