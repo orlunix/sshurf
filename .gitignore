@@ -7,6 +7,9 @@ build/
 **/build/
 .gradle/
 
+# ...but keep electron-builder resources (icons) tracked
+!desktop/build/
+
 # IDE
 .idea/
 *.iml
