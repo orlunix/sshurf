@@ -1,6 +1,11 @@
 # sshurf
 
-带 SSH Socket 转发能力的 Android 浏览器：自带 WebView，全部流量经 SSH 动态转发（`ssh -D` 等价）出网，不用 VpnService、不需要 root。
+带 SSH Socket 转发能力的浏览器：全部流量经 SSH 动态转发（`ssh -D` 等价）出网，不用 VpnService、不需要 root。
+
+**两个平台**：
+
+- `ssh-browser/` — Android 版：自带 WebView 的门户浏览器，书签即应用（详见 `docs/ssh-browser-design.md`）
+- `desktop/` — 桌面版（Windows）：Electron 内置 Chromium + 进程内 SSH 隧道（ssh2）+ 本地 SOCKS5，开箱即用，CI 自动出 MSI（Actions → desktop-msi）
 
 本仓库同时包含一个早期的 GlobalProtect 一键连接实验模块（`app/`）。
 
