@@ -29,7 +29,9 @@ jobs:
       - name: Read version
         id: ver
         working-directory: desktop
-        run: echo "v=$(node -p \"require('./package.json').version\")" >> $env:GITHUB_OUTPUT
+        run: |
+          $v = node -p 'require("./package.json").version'
+          echo "v=$v" >> $env:GITHUB_OUTPUT
 
       - name: Upload MSI to GitHub Release
         uses: softprops/action-gh-release@v2
