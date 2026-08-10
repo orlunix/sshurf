@@ -7,14 +7,19 @@ const dot = document.getElementById('dot');
 const stateEl = document.getElementById('state');
 const urlEl = document.getElementById('url');
 const settings = document.getElementById('settings');
-const histPanel = document.getElementById('histpanel');
+const sidePanel = document.getElementById('sidepanel');
 const logEl = document.getElementById('log');
 const connBtn = document.getElementById('connbtn');
+
+const FAV_SHOW = 5;   // favorites shown before "更多"
+const HIST_SHOW = 10; // history entries shown before "更多"
 
 let tunnelState = 'disconnected';
 let profiles = [];
 let enabledId = '';
-let editingId = null; // profile id whose form is expanded; 'new' for the add form
+let editingId = null;
+let favExpanded = false;
+let histExpanded = false;
 
 // ---------- navigation ----------
 
@@ -33,54 +38,35 @@ function go() {
 urlEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
 document.getElementById('go').addEventListener('click', go);
 
-// ---------- bookmarks (localStorage) ----------
-
-const BM_KEY = 'sshurf.bookmarks';
-const loadBm = () => JSON.parse(localStorage.getItem(BM_KEY) || '[]');
-const saveBm = (list) => localStorage.setItem(BM_KEY, JSON.stringify(list));
-
-function renderBookmarks() {
-    const bar = document.getElementById('bmbar');
-    bar.innerHTML = '';
-    loadBm().forEach((b, i) => {
-        const chip = document.createElement('span');
-        chip.className = 'chip';
-        chip.textContent = b.name;
-        chip.title = b.url + '（右键删除）';
-        chip.addEventListener('click', () => { wv.src = b.url; });
-        chip.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            if (confirm(`删除书签「${b.name}」？`)) {
-                const list = loadBm();
-                list.splice(i, 1);
-                saveBm(list);
-                renderBookmarks();
-            }
-        });
-        bar.appendChild(chip);
-    });
-}
-
-function addBookmark(name, url) {
-    const list = loadBm();
-    if (list.some((b) => b.url === url)) return;
-    list.push({ name, url });
-    saveBm(list);
-    renderBookmarks();
-}
-
-document.getElementById('star').addEventListener('click', () => {
-    const url = wv.getURL();
-    if (!url || url === 'about:blank') return;
-    const name = prompt('书签名称：', wv.getTitle() || url);
-    if (name) addBookmark(name.trim(), url);
+// Keep the address bar in sync with whatever the webview ends up on.
+wv.addEventListener('did-navigate', (e) => {
+    if (e.url !== 'about:blank') urlEl.value = e.url;
+    recordHistory(wv.getTitle() || e.url, e.url);
+});
+wv.addEventListener('did-navigate-in-page', (e) => {
+    if (e.isMainFrame && e.url !== 'about:blank') urlEl.value = e.url;
 });
 
-// ---------- history (localStorage) ----------
+// ---------- favorites + history (localStorage) ----------
 
+const BM_KEY = 'sshurf.bookmarks';
 const HIST_KEY = 'sshurf.history';
+const loadBm = () => JSON.parse(localStorage.getItem(BM_KEY) || '[]');
+const saveBm = (list) => localStorage.setItem(BM_KEY, JSON.stringify(list));
 const loadHist = () => JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
 const saveHist = (list) => localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 20)));
+const isFav = (url) => loadBm().some((b) => b.url === url);
+
+function toggleFav(title, url) {
+    let list = loadBm();
+    if (isFav(url)) {
+        list = list.filter((b) => b.url !== url);
+    } else {
+        list.push({ name: title || url, url });
+    }
+    saveBm(list);
+    renderSidePanel();
+}
 
 function recordHistory(title, url) {
     if (!url || url === 'about:blank') return;
@@ -89,7 +75,6 @@ function recordHistory(title, url) {
     saveHist(list);
 }
 
-wv.addEventListener('did-navigate', (e) => recordHistory(wv.getTitle() || e.url, e.url));
 wv.addEventListener('page-title-updated', (e) => {
     const list = loadHist();
     if (list.length && list[0].url === wv.getURL()) {
@@ -98,41 +83,78 @@ wv.addEventListener('page-title-updated', (e) => {
     }
 });
 
-function renderHistory() {
-    const box = document.getElementById('histlist');
-    box.innerHTML = '';
-    const list = loadHist();
-    if (!list.length) {
-        box.innerHTML = '<div class="small">（暂无记录）</div>';
-        return;
-    }
-    list.forEach((e, i) => {
-        const row = document.createElement('div');
-        row.className = 'hrow';
-        const t = document.createElement('div');
-        t.className = 't';
-        t.textContent = e.title;
-        t.title = e.url;
-        t.addEventListener('click', () => { wv.src = e.url; histPanel.classList.remove('open'); });
-        const add = document.createElement('button');
-        add.textContent = '☆ 收藏';
-        add.addEventListener('click', () => addBookmark(e.title, e.url));
+function row(entry, { fav }) {
+    const r = document.createElement('div');
+    r.className = fav ? 'frow' : 'hrow';
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = fav ? entry.name : entry.title;
+    t.title = entry.url;
+    t.addEventListener('click', () => {
+        wv.src = entry.url;
+        sidePanel.classList.remove('open');
+    });
+    r.appendChild(t);
+    if (fav) {
         const del = document.createElement('button');
         del.textContent = '×';
+        del.title = '取消收藏';
+        del.addEventListener('click', () => toggleFav(entry.name, entry.url));
+        r.appendChild(del);
+    } else {
+        const star = document.createElement('button');
+        const faved = isFav(entry.url);
+        star.className = 'star' + (faved ? ' on' : '');
+        star.textContent = faved ? '★' : '☆';
+        star.title = faved ? '取消收藏' : '收藏';
+        star.addEventListener('click', () => toggleFav(entry.title, entry.url));
+        const del = document.createElement('button');
+        del.textContent = '×';
+        del.title = '删除记录';
         del.addEventListener('click', () => {
-            const l = loadHist();
-            l.splice(i, 1);
-            saveHist(l);
-            renderHistory();
+            saveHist(loadHist().filter((h) => h.url !== entry.url));
+            renderSidePanel();
         });
-        row.append(t, add, del);
-        box.appendChild(row);
-    });
+        r.append(star, del);
+    }
+    return r;
 }
 
-document.getElementById('histbtn').addEventListener('click', () => {
-    renderHistory();
-    histPanel.classList.toggle('open');
+function renderSidePanel() {
+    const favs = loadBm();
+    const favBox = document.getElementById('favlist');
+    favBox.innerHTML = '';
+    (favExpanded ? favs : favs.slice(0, FAV_SHOW))
+        .forEach((b) => favBox.appendChild(row(b, { fav: true })));
+    if (!favs.length) favBox.innerHTML = '<div class="small">（从历史记录点 ☆ 收藏）</div>';
+    const favMore = document.getElementById('favmore');
+    if (favs.length > FAV_SHOW) {
+        favMore.style.display = 'block';
+        favMore.textContent = favExpanded ? '收起' : `更多（共 ${favs.length} 条）…`;
+        favMore.onclick = () => { favExpanded = !favExpanded; renderSidePanel(); };
+    } else {
+        favMore.style.display = 'none';
+    }
+
+    const hist = loadHist();
+    const histBox = document.getElementById('histlist');
+    histBox.innerHTML = '';
+    (histExpanded ? hist : hist.slice(0, HIST_SHOW))
+        .forEach((e) => histBox.appendChild(row(e, { fav: false })));
+    if (!hist.length) histBox.innerHTML = '<div class="small">（暂无记录）</div>';
+    const histMore = document.getElementById('histmore');
+    if (hist.length > HIST_SHOW) {
+        histMore.style.display = 'block';
+        histMore.textContent = histExpanded ? '收起' : `更多（共 ${hist.length} 条）…`;
+        histMore.onclick = () => { histExpanded = !histExpanded; renderSidePanel(); };
+    } else {
+        histMore.style.display = 'none';
+    }
+}
+
+document.getElementById('favhist').addEventListener('click', () => {
+    renderSidePanel();
+    sidePanel.classList.toggle('open');
     settings.classList.remove('open');
 });
 
@@ -153,26 +175,26 @@ function renderProfiles() {
             box.appendChild(profileForm(p));
             return;
         }
-        const row = document.createElement('div');
-        row.className = 'prow' + (p.id === enabledId ? ' enabled' : '');
+        const rowEl = document.createElement('div');
+        rowEl.className = 'prow' + (p.id === enabledId ? ' enabled' : '');
         const radio = document.createElement('span');
         radio.textContent = p.id === enabledId ? '◉' : '○';
         const meta = document.createElement('div');
         meta.className = 'meta';
-        meta.innerHTML = `<div class="name"></div><div class="sum"></div>`;
+        meta.innerHTML = '<div class="name"></div><div class="sum"></div>';
         meta.querySelector('.name').textContent = p.name;
         meta.querySelector('.sum').textContent =
             `${p.user}@${p.host}${p.port === 22 ? '' : ':' + p.port}${p.auth === 'key' ? ' · 密钥' : ''}`;
         const edit = document.createElement('button');
         edit.textContent = '编辑';
         edit.addEventListener('click', (e) => { e.stopPropagation(); editingId = p.id; renderProfiles(); });
-        row.append(radio, meta, edit);
-        row.addEventListener('click', async () => {
+        rowEl.append(radio, meta, edit);
+        rowEl.addEventListener('click', async () => {
             await sshurf.enableProfile(p.id);
             enabledId = p.id;
             renderProfiles();
         });
-        box.appendChild(row);
+        box.appendChild(rowEl);
     });
     if (editingId === 'new') box.appendChild(profileForm(null));
 }
@@ -255,7 +277,7 @@ document.getElementById('addprof').addEventListener('click', () => {
 
 document.getElementById('gear').addEventListener('click', () => {
     settings.classList.toggle('open');
-    histPanel.classList.remove('open');
+    sidePanel.classList.remove('open');
     if (settings.classList.contains('open')) refreshProfiles();
 });
 
@@ -289,7 +311,6 @@ sshurf.onLog((msg) => {
 // ---------- init ----------
 
 (async () => {
-    renderBookmarks();
     const data = await sshurf.listProfiles();
     profiles = data.profiles;
     enabledId = data.enabledId;
