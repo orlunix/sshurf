@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>sshurf</title>
+<title>sshurf desktop</title>
 <style>
   * { box-sizing: border-box; margin: 0; }
-  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
   #toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid #e0e0e0; }
   #dot { font-size: 14px; color: #9e9e9e; }
   #dot.on { color: #4caf50; } #dot.ing { color: #ffc107; }
@@ -44,30 +44,33 @@
 </head>
 <body>
   <div id="toolbar">
-    <span id="dot">●</span><span id="state">未连接</span>
-    <input id="url" placeholder="输入网址，回车打开" autofocus>
-    <button id="go">访问</button>
-    <button id="favhist" title="收藏夹 / 最近访问">★</button>
-    <button id="gear" title="SSH 设置">⚙</button>
+    <span id="dot">●</span><span id="state">Disconnected</span>
+    <input id="url" placeholder="Enter URL and press Enter" autofocus>
+    <button id="go">Go</button>
+    <button id="favhist" title="Favorites / History">★</button>
+    <button id="gear" title="SSH settings">⚙</button>
   </div>
   <webview id="wv" partition="persist:browser" src="about:blank"></webview>
 
   <div id="sidepanel" class="panel">
-    <h2>收藏夹</h2>
+    <h2>Favorites</h2>
     <div id="favlist"></div>
     <div class="more" id="favmore" style="display:none"></div>
     <hr>
-    <h2>最近访问</h2>
+    <h2>History</h2>
     <div id="histlist"></div>
     <div class="more" id="histmore" style="display:none"></div>
   </div>
 
   <div id="settings" class="panel">
-    <h2>SSH 服务器</h2>
+    <h2>SSH Servers</h2>
     <div id="proflist"></div>
-    <button id="addprof">＋ 添加服务器</button>
+    <div class="row">
+      <button id="addprof">＋ Add server</button>
+      <button id="importbtn">⭳ Import</button>
+    </div>
     <div class="row" style="margin-top:10px">
-      <button id="connbtn">连接</button>
+      <button id="connbtn">Connect</button>
     </div>
     <div id="log"></div>
   </div>

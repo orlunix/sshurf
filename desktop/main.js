@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { Tunnel, SOCKS_PORT } = require('./tunnel');
 const store = require('./store');
@@ -38,9 +39,47 @@ ipcMain.handle('profiles:save', (_e, p) => store.saveProfile(p));
 ipcMain.handle('profiles:delete', (_e, id) => store.deleteProfile(id));
 ipcMain.handle('profiles:enable', (_e, id) => store.setEnabled(id));
 
+// Parse ~/.ssh/config (OpenSSH client config) into importable profiles.
+ipcMain.handle('sshconfig:list', () => {
+    const os = require('os');
+    const cfgPath = path.join(os.homedir(), '.ssh', 'config');
+    let text;
+    try {
+        text = fs.readFileSync(cfgPath, 'utf8');
+    } catch (e) {
+        return { error: `Not found: ${cfgPath}`, entries: [] };
+    }
+    const home = os.homedir();
+    const expand = (v) => v.replace(/^["']|["']$/g, '')
+        .replace(/^~/, home).replace(/%d/g, home);
+    const entries = [];
+    let cur = null;
+    for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const m = line.match(/^(\S+)\s+(.+)$/);
+        if (!m) continue;
+        const key = m[1].toLowerCase();
+        const val = m[2].trim();
+        if (key === 'host') {
+            if (cur) entries.push(cur);
+            const names = val.split(/\s+/)
+                .filter((n) => !n.includes('*') && !n.includes('?') && !n.startsWith('!'));
+            cur = names.length ? { name: names[0] } : null;
+        } else if (cur) {
+            if (key === 'hostname') cur.host = expand(val);
+            else if (key === 'port') cur.port = parseInt(val, 10) || 22;
+            else if (key === 'user') cur.user = val;
+            else if (key === 'identityfile') cur.keyPath = expand(val);
+        }
+    }
+    if (cur) entries.push(cur);
+    return { entries: entries.filter((e) => e.host && e.user) };
+});
+
 ipcMain.handle('key:pick', async () => {
     const r = await dialog.showOpenDialog(win, {
-        title: '选择私钥文件',
+        title: 'Choose private key file',
         properties: ['openFile'],
     });
     return r.canceled ? null : r.filePaths[0];

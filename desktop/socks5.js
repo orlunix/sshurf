@@ -47,7 +47,7 @@ class Socks5Server {
                 if (stage === 'greeting') {
                     if (buf.length < 2) return;
                     if (buf[0] !== 0x05) {
-                        this.log('非 SOCKS5 握手，关闭');
+                        this.log('non-SOCKS5 handshake, closing');
                         socket.end();
                         return;
                     }
@@ -89,7 +89,7 @@ class Socks5Server {
                     relayed = true;
                 }
             } catch (e) {
-                this.log(`SOCKS 处理异常: ${e.message}`);
+                this.log(`SOCKS error: ${e.message}`);
                 socket.destroy();
             }
         });
@@ -102,7 +102,7 @@ class Socks5Server {
         const target = `${host}:${port}`;
         const ssh = this.getSsh();
         if (!ssh) {
-            this.log(`✗ ${target} 隧道未连接`);
+            this.log(`✗ ${target} tunnel is down`);
             socket.end();
             return;
         }

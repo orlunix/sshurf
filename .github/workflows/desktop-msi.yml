@@ -38,5 +38,5 @@ jobs:
         with:
           tag_name: desktop-v${{ steps.ver.outputs.v }}
           name: desktop v${{ steps.ver.outputs.v }}
-          body: sshurf 桌面版（Windows MSI）。内置 SSH 隧道 + 浏览器，开箱即用。
+          body: sshurf desktop (Windows MSI). Browser with a built-in SSH tunnel.
           files: desktop/dist/*.msi

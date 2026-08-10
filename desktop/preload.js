@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('sshurf', {
     saveProfile: (p) => ipcRenderer.invoke('profiles:save', p),
     deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
     enableProfile: (id) => ipcRenderer.invoke('profiles:enable', id),
+    listSshConfig: () => ipcRenderer.invoke('sshconfig:list'),
     pickKey: () => ipcRenderer.invoke('key:pick'),
     connect: () => ipcRenderer.invoke('tunnel:connect'),
     disconnect: () => ipcRenderer.invoke('tunnel:disconnect'),

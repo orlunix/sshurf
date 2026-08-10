@@ -59,7 +59,7 @@ function migrate(raw) {
         return {
             enabledId: 'default',
             profiles: [toStored({
-                id: 'default', name: '默认服务器', host: raw.host, port: raw.port || 22,
+                id: 'default', name: 'Default server', host: raw.host, port: raw.port || 22,
                 user: raw.user, auth: raw.auth || 'key', keyPath: raw.keyPath || '',
                 password: dec(raw.passwordEnc), passphrase: dec(raw.passphraseEnc),
             })],

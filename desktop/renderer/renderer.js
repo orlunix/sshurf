@@ -11,8 +11,8 @@ const sidePanel = document.getElementById('sidepanel');
 const logEl = document.getElementById('log');
 const connBtn = document.getElementById('connbtn');
 
-const FAV_SHOW = 5;   // favorites shown before "更多"
-const HIST_SHOW = 10; // history entries shown before "更多"
+const FAV_SHOW = 5;   // favorites shown before "More"
+const HIST_SHOW = 10; // history entries shown before "More"
 
 let tunnelState = 'disconnected';
 let profiles = [];
@@ -20,6 +20,9 @@ let enabledId = '';
 let editingId = null;
 let favExpanded = false;
 let histExpanded = false;
+let importMode = false;   // proflist shows ~/.ssh/config entries instead
+let importEntries = [];
+let newDraft = null;      // prefill for the add form (used by import)
 
 // ---------- navigation ----------
 
@@ -98,7 +101,7 @@ function row(entry, { fav }) {
     if (fav) {
         const del = document.createElement('button');
         del.textContent = '×';
-        del.title = '取消收藏';
+        del.title = 'Remove favorite';
         del.addEventListener('click', () => toggleFav(entry.name, entry.url));
         r.appendChild(del);
     } else {
@@ -106,11 +109,11 @@ function row(entry, { fav }) {
         const faved = isFav(entry.url);
         star.className = 'star' + (faved ? ' on' : '');
         star.textContent = faved ? '★' : '☆';
-        star.title = faved ? '取消收藏' : '收藏';
+        star.title = faved ? 'Remove favorite' : 'Add to favorites';
         star.addEventListener('click', () => toggleFav(entry.title, entry.url));
         const del = document.createElement('button');
         del.textContent = '×';
-        del.title = '删除记录';
+        del.title = 'Delete entry';
         del.addEventListener('click', () => {
             saveHist(loadHist().filter((h) => h.url !== entry.url));
             renderSidePanel();
@@ -126,11 +129,11 @@ function renderSidePanel() {
     favBox.innerHTML = '';
     (favExpanded ? favs : favs.slice(0, FAV_SHOW))
         .forEach((b) => favBox.appendChild(row(b, { fav: true })));
-    if (!favs.length) favBox.innerHTML = '<div class="small">（从历史记录点 ☆ 收藏）</div>';
+    if (!favs.length) favBox.innerHTML = '<div class="small">(star entries from History below)</div>';
     const favMore = document.getElementById('favmore');
     if (favs.length > FAV_SHOW) {
         favMore.style.display = 'block';
-        favMore.textContent = favExpanded ? '收起' : `更多（共 ${favs.length} 条）…`;
+        favMore.textContent = favExpanded ? 'Collapse' : `More (${favs.length} total)…`;
         favMore.onclick = () => { favExpanded = !favExpanded; renderSidePanel(); };
     } else {
         favMore.style.display = 'none';
@@ -141,11 +144,11 @@ function renderSidePanel() {
     histBox.innerHTML = '';
     (histExpanded ? hist : hist.slice(0, HIST_SHOW))
         .forEach((e) => histBox.appendChild(row(e, { fav: false })));
-    if (!hist.length) histBox.innerHTML = '<div class="small">（暂无记录）</div>';
+    if (!hist.length) histBox.innerHTML = '<div class="small">(empty)</div>';
     const histMore = document.getElementById('histmore');
     if (hist.length > HIST_SHOW) {
         histMore.style.display = 'block';
-        histMore.textContent = histExpanded ? '收起' : `更多（共 ${hist.length} 条）…`;
+        histMore.textContent = histExpanded ? 'Collapse' : `More (${hist.length} total)…`;
         histMore.onclick = () => { histExpanded = !histExpanded; renderSidePanel(); };
     } else {
         histMore.style.display = 'none';
@@ -170,6 +173,41 @@ async function refreshProfiles() {
 function renderProfiles() {
     const box = document.getElementById('proflist');
     box.innerHTML = '';
+
+    if (importMode) {
+        if (!importEntries.length) {
+            box.innerHTML = '<div class="small">(no importable hosts found)</div>';
+        }
+        importEntries.forEach((e) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'prow';
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.innerHTML = '<div class="name"></div><div class="sum"></div>';
+            meta.querySelector('.name').textContent = e.name;
+            meta.querySelector('.sum').textContent =
+                `${e.user}@${e.host}${e.port && e.port !== 22 ? ':' + e.port : ''}`
+                + (e.keyPath ? ' · key ' + e.keyPath.split(/[\\/]/).pop() : '');
+            rowEl.appendChild(meta);
+            rowEl.addEventListener('click', () => {
+                newDraft = {
+                    id: '', name: e.name, host: e.host, port: e.port || 22,
+                    user: e.user, auth: e.keyPath ? 'key' : 'password',
+                    keyPath: e.keyPath || '', password: '', passphrase: '',
+                };
+                importMode = false;
+                editingId = 'new';
+                renderProfiles();
+            });
+            box.appendChild(rowEl);
+        });
+        const back = document.createElement('button');
+        back.textContent = '← Back';
+        back.addEventListener('click', () => { importMode = false; renderProfiles(); });
+        box.appendChild(back);
+        return;
+    }
+
     profiles.forEach((p) => {
         if (editingId === p.id) {
             box.appendChild(profileForm(p));
@@ -184,9 +222,9 @@ function renderProfiles() {
         meta.innerHTML = '<div class="name"></div><div class="sum"></div>';
         meta.querySelector('.name').textContent = p.name;
         meta.querySelector('.sum').textContent =
-            `${p.user}@${p.host}${p.port === 22 ? '' : ':' + p.port}${p.auth === 'key' ? ' · 密钥' : ''}`;
+            `${p.user}@${p.host}${p.port === 22 ? '' : ':' + p.port}${p.auth === 'key' ? ' · key' : ''}`;
         const edit = document.createElement('button');
-        edit.textContent = '编辑';
+        edit.textContent = 'Edit';
         edit.addEventListener('click', (e) => { e.stopPropagation(); editingId = p.id; renderProfiles(); });
         rowEl.append(radio, meta, edit);
         rowEl.addEventListener('click', async () => {
@@ -201,36 +239,39 @@ function renderProfiles() {
 
 function profileForm(p) {
     const isNew = !p;
-    p = p || { id: '', name: '', host: '', port: 22, user: '', auth: 'key', keyPath: '', password: '', passphrase: '' };
+    const draft = p || Object.assign(
+        { id: '', name: '', host: '', port: 22, user: '', auth: 'key', keyPath: '', password: '', passphrase: '' },
+        newDraft);
+    newDraft = null;
     const form = document.createElement('div');
     form.className = 'pform';
     form.innerHTML = `
-        <input type="text" data-f="name" placeholder="名称（如：公司服务器）">
-        <input type="text" data-f="host" placeholder="主机">
-        <input type="number" data-f="port" placeholder="端口（默认 22）">
-        <input type="text" data-f="user" placeholder="用户名">
+        <input type="text" data-f="name" placeholder="Name (e.g. work)">
+        <input type="text" data-f="host" placeholder="Host">
+        <input type="number" data-f="port" placeholder="Port (default 22)">
+        <input type="text" data-f="user" placeholder="Username">
         <div class="row">
-          <label><input type="radio" name="auth" data-f="auth-key" style="width:auto"> 私钥</label>
-          <label><input type="radio" name="auth" data-f="auth-pass" style="width:auto"> 密码</label>
+          <label><input type="radio" name="auth" data-f="auth-key" style="width:auto"> Private key</label>
+          <label><input type="radio" name="auth" data-f="auth-pass" style="width:auto"> Password</label>
         </div>
-        <div class="row"><button type="button" data-f="pick">选择私钥文件</button></div>
-        <div class="small" data-f="keypath">（未选择）</div>
-        <input type="password" data-f="passphrase" placeholder="私钥口令（可选）">
-        <input type="password" data-f="password" placeholder="密码（选密码认证时填）">
+        <div class="row"><button type="button" data-f="pick">Choose key file…</button></div>
+        <div class="small" data-f="keypath">(none)</div>
+        <input type="password" data-f="passphrase" placeholder="Key passphrase (optional)">
+        <input type="password" data-f="password" placeholder="Password (for password auth)">
         <div class="row">
-          <button type="button" data-f="save">保存</button>
-          ${isNew ? '' : '<button type="button" data-f="del">删除</button>'}
-          <button type="button" data-f="cancel">收起</button>
+          <button type="button" data-f="save">Save</button>
+          ${isNew ? '' : '<button type="button" data-f="del">Delete</button>'}
+          <button type="button" data-f="cancel">Cancel</button>
         </div>`;
     const q = (sel) => form.querySelector(`[data-f="${sel}"]`);
-    q('name').value = p.name;
-    q('host').value = p.host;
-    q('port').value = p.port || '';
-    q('user').value = p.user;
-    q('passphrase').value = p.passphrase || '';
-    q('password').value = p.password || '';
-    q(p.auth === 'key' ? 'auth-key' : 'auth-pass').checked = true;
-    if (p.keyPath) q('keypath').textContent = p.keyPath;
+    q('name').value = draft.name;
+    q('host').value = draft.host;
+    q('port').value = draft.port || '';
+    q('user').value = draft.user;
+    q('passphrase').value = draft.passphrase || '';
+    q('password').value = draft.password || '';
+    q(draft.auth === 'key' ? 'auth-key' : 'auth-pass').checked = true;
+    if (draft.keyPath) q('keypath').textContent = draft.keyPath;
 
     q('pick').addEventListener('click', async () => {
         const path = await sshurf.pickKey();
@@ -241,26 +282,26 @@ function profileForm(p) {
         }
     });
     q('save').addEventListener('click', async () => {
-        const draft = {
-            id: p.id,
+        const out = {
+            id: draft.id,
             name: q('name').value.trim() || q('host').value.trim(),
             host: q('host').value.trim(),
             port: parseInt(q('port').value, 10) || 22,
             user: q('user').value.trim(),
             auth: q('auth-key').checked ? 'key' : 'password',
-            keyPath: q('keypath').dataset.path || p.keyPath || '',
+            keyPath: q('keypath').dataset.path || draft.keyPath || '',
             passphrase: q('passphrase').value,
             password: q('password').value,
         };
-        if (!draft.host || !draft.user) { alert('主机和用户名必填'); return; }
-        await sshurf.saveProfile(draft);
+        if (!out.host || !out.user) { alert('Host and username are required'); return; }
+        await sshurf.saveProfile(out);
         editingId = null;
         refreshProfiles();
     });
     if (!isNew) {
         q('del').addEventListener('click', async () => {
-            if (confirm(`删除「${p.name}」？`)) {
-                await sshurf.deleteProfile(p.id);
+            if (confirm(`Delete "${draft.name}"?`)) {
+                await sshurf.deleteProfile(draft.id);
                 editingId = null;
                 refreshProfiles();
             }
@@ -271,21 +312,37 @@ function profileForm(p) {
 }
 
 document.getElementById('addprof').addEventListener('click', () => {
+    importMode = false;
     editingId = editingId === 'new' ? null : 'new';
+    renderProfiles();
+});
+
+document.getElementById('importbtn').addEventListener('click', async () => {
+    const r = await sshurf.listSshConfig();
+    if (r.error) {
+        alert(r.error);
+        return;
+    }
+    importEntries = r.entries;
+    importMode = true;
+    editingId = null;
     renderProfiles();
 });
 
 document.getElementById('gear').addEventListener('click', () => {
     settings.classList.toggle('open');
     sidePanel.classList.remove('open');
-    if (settings.classList.contains('open')) refreshProfiles();
+    if (settings.classList.contains('open')) {
+        importMode = false;
+        refreshProfiles();
+    }
 });
 
 // ---------- tunnel ----------
 
 connBtn.addEventListener('click', async () => {
     if (tunnelState === 'disconnected') {
-        if (!profiles.length) { alert('请先添加服务器'); return; }
+        if (!profiles.length) { alert('Add a server first'); return; }
         await sshurf.connect();
     } else {
         await sshurf.disconnect();
@@ -295,9 +352,9 @@ connBtn.addEventListener('click', async () => {
 sshurf.onStatus((state, detail) => {
     tunnelState = state;
     dot.className = state === 'connected' ? 'on' : state === 'connecting' ? 'ing' : '';
-    stateEl.textContent = state === 'connected' ? '已连接'
-        : state === 'connecting' ? (detail || '连接中…') : '未连接';
-    connBtn.textContent = state === 'disconnected' ? '连接' : '断开';
+    stateEl.textContent = state === 'connected' ? 'Connected'
+        : state === 'connecting' ? (detail || 'Connecting…') : 'Disconnected';
+    connBtn.textContent = state === 'disconnected' ? 'Connect' : 'Disconnect';
 });
 
 sshurf.onLog((msg) => {

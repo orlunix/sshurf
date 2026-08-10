@@ -45,13 +45,13 @@ class Tunnel extends EventEmitter {
     async _loop() {
         while (this.enabled) {
             try {
-                this._status('connecting', '正在连接 SSH…');
+                this._status('connecting', 'Connecting…');
                 await this._connectAndWait(); // returns when an established connection drops
             } catch (e) {
-                if (this.enabled) this._log(`连接失败：${e.message}`);
+                if (this.enabled) this._log(`Connect failed: ${e.message}`);
             }
             if (this.enabled) {
-                this._status('connecting', `${RECONNECT_DELAY_MS / 1000}s 后重连…`);
+                this._status('connecting', `reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
                 await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
             }
         }
@@ -83,20 +83,20 @@ class Tunnel extends EventEmitter {
             conn.on('ready', () => {
                 ready = true;
                 this.ssh = conn;
-                this._status('connected', 'SSH 已连接');
+                this._status('connected', 'SSH connected');
             });
             conn.on('error', (e) => {
-                this._log(`SSH 错误: ${e.message}`);
+                this._log(`SSH error: ${e.message}`);
                 if (!ready) reject(e);
                 // post-ready errors are followed by 'close', which resolves
             });
             conn.on('close', () => {
                 if (this.ssh === conn) this.ssh = null;
                 if (ready) {
-                    if (this.enabled) this._log('SSH 连接断开');
+                    if (this.enabled) this._log('SSH connection dropped');
                     resolve();
                 } else {
-                    reject(new Error('连接被关闭'));
+                    reject(new Error('Connection closed'));
                 }
             });
             conn.connect(opts);
