@@ -1,0 +1,40 @@
+name: desktop-msi
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Build MSI
+        working-directory: desktop
+        run: npx electron-builder --win msi
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # no code signing cert
+
+      - name: Read version
+        id: ver
+        working-directory: desktop
+        run: echo "v=$(node -p \"require('./package.json').version\")" >> $env:GITHUB_OUTPUT
+
+      - name: Upload MSI to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.ver.outputs.v }}
+          name: desktop v${{ steps.ver.outputs.v }}
+          body: sshurf 桌面版（Windows MSI）。内置 SSH 隧道 + 浏览器，开箱即用。
+          files: desktop/dist/*.msi

@@ -1,0 +1,34 @@
+{
+  "name": "sshurf-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser with a built-in SSH tunnel (desktop edition of sshurf)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "ssh2": "^1.15.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.sshurf.desktop",
+    "productName": "sshurf",
+    "files": [
+      "**/*",
+      "!dist/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "msi"
+      ]
+    }
+  }
+}

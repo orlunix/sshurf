@@ -11,6 +11,10 @@ build/
 .idea/
 *.iml
 
+# Desktop (Electron) build artifacts
+desktop/node_modules/
+desktop/dist/
+
 # Agent session data & phone screenshots (may contain credentials)
 .cam-images/
 .agents/
