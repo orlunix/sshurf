@@ -6,14 +6,17 @@ const wv = document.getElementById('wv');
 const dot = document.getElementById('dot');
 const stateEl = document.getElementById('state');
 const urlEl = document.getElementById('url');
-const toggleBtn = document.getElementById('toggle');
 const settings = document.getElementById('settings');
+const histPanel = document.getElementById('histpanel');
 const logEl = document.getElementById('log');
+const connBtn = document.getElementById('connbtn');
 
-let connected = false;
-let keyPath = '';
+let tunnelState = 'disconnected';
+let profiles = [];
+let enabledId = '';
+let editingId = null; // profile id whose form is expanded; 'new' for the add form
 
-// --- navigation ---
+// ---------- navigation ----------
 
 function toUrl(input) {
     if (!input) return null;
@@ -30,55 +33,249 @@ function go() {
 urlEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
 document.getElementById('go').addEventListener('click', go);
 
-// --- settings panel ---
+// ---------- bookmarks (localStorage) ----------
+
+const BM_KEY = 'sshurf.bookmarks';
+const loadBm = () => JSON.parse(localStorage.getItem(BM_KEY) || '[]');
+const saveBm = (list) => localStorage.setItem(BM_KEY, JSON.stringify(list));
+
+function renderBookmarks() {
+    const bar = document.getElementById('bmbar');
+    bar.innerHTML = '';
+    loadBm().forEach((b, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = b.name;
+        chip.title = b.url + '（右键删除）';
+        chip.addEventListener('click', () => { wv.src = b.url; });
+        chip.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (confirm(`删除书签「${b.name}」？`)) {
+                const list = loadBm();
+                list.splice(i, 1);
+                saveBm(list);
+                renderBookmarks();
+            }
+        });
+        bar.appendChild(chip);
+    });
+}
+
+function addBookmark(name, url) {
+    const list = loadBm();
+    if (list.some((b) => b.url === url)) return;
+    list.push({ name, url });
+    saveBm(list);
+    renderBookmarks();
+}
+
+document.getElementById('star').addEventListener('click', () => {
+    const url = wv.getURL();
+    if (!url || url === 'about:blank') return;
+    const name = prompt('书签名称：', wv.getTitle() || url);
+    if (name) addBookmark(name.trim(), url);
+});
+
+// ---------- history (localStorage) ----------
+
+const HIST_KEY = 'sshurf.history';
+const loadHist = () => JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+const saveHist = (list) => localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 20)));
+
+function recordHistory(title, url) {
+    if (!url || url === 'about:blank') return;
+    const list = loadHist().filter((e) => e.url !== url);
+    list.unshift({ title: title || url, url });
+    saveHist(list);
+}
+
+wv.addEventListener('did-navigate', (e) => recordHistory(wv.getTitle() || e.url, e.url));
+wv.addEventListener('page-title-updated', (e) => {
+    const list = loadHist();
+    if (list.length && list[0].url === wv.getURL()) {
+        list[0].title = e.title;
+        saveHist(list);
+    }
+});
+
+function renderHistory() {
+    const box = document.getElementById('histlist');
+    box.innerHTML = '';
+    const list = loadHist();
+    if (!list.length) {
+        box.innerHTML = '<div class="small">（暂无记录）</div>';
+        return;
+    }
+    list.forEach((e, i) => {
+        const row = document.createElement('div');
+        row.className = 'hrow';
+        const t = document.createElement('div');
+        t.className = 't';
+        t.textContent = e.title;
+        t.title = e.url;
+        t.addEventListener('click', () => { wv.src = e.url; histPanel.classList.remove('open'); });
+        const add = document.createElement('button');
+        add.textContent = '☆ 收藏';
+        add.addEventListener('click', () => addBookmark(e.title, e.url));
+        const del = document.createElement('button');
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+            const l = loadHist();
+            l.splice(i, 1);
+            saveHist(l);
+            renderHistory();
+        });
+        row.append(t, add, del);
+        box.appendChild(row);
+    });
+}
+
+document.getElementById('histbtn').addEventListener('click', () => {
+    renderHistory();
+    histPanel.classList.toggle('open');
+    settings.classList.remove('open');
+});
+
+// ---------- SSH profiles ----------
+
+async function refreshProfiles() {
+    const data = await sshurf.listProfiles();
+    profiles = data.profiles;
+    enabledId = data.enabledId;
+    renderProfiles();
+}
+
+function renderProfiles() {
+    const box = document.getElementById('proflist');
+    box.innerHTML = '';
+    profiles.forEach((p) => {
+        if (editingId === p.id) {
+            box.appendChild(profileForm(p));
+            return;
+        }
+        const row = document.createElement('div');
+        row.className = 'prow' + (p.id === enabledId ? ' enabled' : '');
+        const radio = document.createElement('span');
+        radio.textContent = p.id === enabledId ? '◉' : '○';
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `<div class="name"></div><div class="sum"></div>`;
+        meta.querySelector('.name').textContent = p.name;
+        meta.querySelector('.sum').textContent =
+            `${p.user}@${p.host}${p.port === 22 ? '' : ':' + p.port}${p.auth === 'key' ? ' · 密钥' : ''}`;
+        const edit = document.createElement('button');
+        edit.textContent = '编辑';
+        edit.addEventListener('click', (e) => { e.stopPropagation(); editingId = p.id; renderProfiles(); });
+        row.append(radio, meta, edit);
+        row.addEventListener('click', async () => {
+            await sshurf.enableProfile(p.id);
+            enabledId = p.id;
+            renderProfiles();
+        });
+        box.appendChild(row);
+    });
+    if (editingId === 'new') box.appendChild(profileForm(null));
+}
+
+function profileForm(p) {
+    const isNew = !p;
+    p = p || { id: '', name: '', host: '', port: 22, user: '', auth: 'key', keyPath: '', password: '', passphrase: '' };
+    const form = document.createElement('div');
+    form.className = 'pform';
+    form.innerHTML = `
+        <input type="text" data-f="name" placeholder="名称（如：公司服务器）">
+        <input type="text" data-f="host" placeholder="主机">
+        <input type="number" data-f="port" placeholder="端口（默认 22）">
+        <input type="text" data-f="user" placeholder="用户名">
+        <div class="row">
+          <label><input type="radio" name="auth" data-f="auth-key" style="width:auto"> 私钥</label>
+          <label><input type="radio" name="auth" data-f="auth-pass" style="width:auto"> 密码</label>
+        </div>
+        <div class="row"><button type="button" data-f="pick">选择私钥文件</button></div>
+        <div class="small" data-f="keypath">（未选择）</div>
+        <input type="password" data-f="passphrase" placeholder="私钥口令（可选）">
+        <input type="password" data-f="password" placeholder="密码（选密码认证时填）">
+        <div class="row">
+          <button type="button" data-f="save">保存</button>
+          ${isNew ? '' : '<button type="button" data-f="del">删除</button>'}
+          <button type="button" data-f="cancel">收起</button>
+        </div>`;
+    const q = (sel) => form.querySelector(`[data-f="${sel}"]`);
+    q('name').value = p.name;
+    q('host').value = p.host;
+    q('port').value = p.port || '';
+    q('user').value = p.user;
+    q('passphrase').value = p.passphrase || '';
+    q('password').value = p.password || '';
+    q(p.auth === 'key' ? 'auth-key' : 'auth-pass').checked = true;
+    if (p.keyPath) q('keypath').textContent = p.keyPath;
+
+    q('pick').addEventListener('click', async () => {
+        const path = await sshurf.pickKey();
+        if (path) {
+            q('keypath').textContent = path;
+            q('keypath').dataset.path = path;
+            q('auth-key').checked = true;
+        }
+    });
+    q('save').addEventListener('click', async () => {
+        const draft = {
+            id: p.id,
+            name: q('name').value.trim() || q('host').value.trim(),
+            host: q('host').value.trim(),
+            port: parseInt(q('port').value, 10) || 22,
+            user: q('user').value.trim(),
+            auth: q('auth-key').checked ? 'key' : 'password',
+            keyPath: q('keypath').dataset.path || p.keyPath || '',
+            passphrase: q('passphrase').value,
+            password: q('password').value,
+        };
+        if (!draft.host || !draft.user) { alert('主机和用户名必填'); return; }
+        await sshurf.saveProfile(draft);
+        editingId = null;
+        refreshProfiles();
+    });
+    if (!isNew) {
+        q('del').addEventListener('click', async () => {
+            if (confirm(`删除「${p.name}」？`)) {
+                await sshurf.deleteProfile(p.id);
+                editingId = null;
+                refreshProfiles();
+            }
+        });
+    }
+    q('cancel').addEventListener('click', () => { editingId = null; renderProfiles(); });
+    return form;
+}
+
+document.getElementById('addprof').addEventListener('click', () => {
+    editingId = editingId === 'new' ? null : 'new';
+    renderProfiles();
+});
 
 document.getElementById('gear').addEventListener('click', () => {
     settings.classList.toggle('open');
+    histPanel.classList.remove('open');
+    if (settings.classList.contains('open')) refreshProfiles();
 });
 
-document.getElementById('s-pickkey').addEventListener('click', async () => {
-    const p = await sshurf.pickKey();
-    if (p) {
-        keyPath = p;
-        document.getElementById('keypath').textContent = p;
-        document.getElementById('s-auth-key').checked = true;
-    }
-});
+// ---------- tunnel ----------
 
-function readForm() {
-    return {
-        host: document.getElementById('s-host').value.trim(),
-        port: parseInt(document.getElementById('s-port').value, 10) || 22,
-        user: document.getElementById('s-user').value.trim(),
-        auth: document.getElementById('s-auth-key').checked ? 'key' : 'password',
-        keyPath,
-        passphrase: document.getElementById('s-passphrase').value,
-        password: document.getElementById('s-password').value,
-    };
-}
-
-document.getElementById('s-save').addEventListener('click', async () => {
-    const cfg = readForm();
-    await sshurf.saveConfig(cfg);
-    await sshurf.connect(cfg);
-});
-
-toggleBtn.addEventListener('click', async () => {
-    if (connected || dot.classList.contains('ing')) {
-        await sshurf.disconnect();
+connBtn.addEventListener('click', async () => {
+    if (tunnelState === 'disconnected') {
+        if (!profiles.length) { alert('请先添加服务器'); return; }
+        await sshurf.connect();
     } else {
-        await sshurf.connect(null); // use saved config
+        await sshurf.disconnect();
     }
 });
-
-// --- status & log ---
 
 sshurf.onStatus((state, detail) => {
-    connected = state === 'connected';
+    tunnelState = state;
     dot.className = state === 'connected' ? 'on' : state === 'connecting' ? 'ing' : '';
     stateEl.textContent = state === 'connected' ? '已连接'
         : state === 'connecting' ? (detail || '连接中…') : '未连接';
-    toggleBtn.textContent = state === 'disconnected' ? '连接' : '断开';
+    connBtn.textContent = state === 'disconnected' ? '连接' : '断开';
 });
 
 sshurf.onLog((msg) => {
@@ -89,19 +286,12 @@ sshurf.onLog((msg) => {
     logEl.scrollTop = logEl.scrollHeight;
 });
 
-// --- init ---
+// ---------- init ----------
 
 (async () => {
-    const cfg = await sshurf.loadConfig();
-    if (cfg.host) document.getElementById('s-host').value = cfg.host;
-    if (cfg.port) document.getElementById('s-port').value = cfg.port;
-    if (cfg.user) document.getElementById('s-user').value = cfg.user;
-    if (cfg.keyPath) {
-        keyPath = cfg.keyPath;
-        document.getElementById('keypath').textContent = cfg.keyPath;
-    }
-    if (cfg.auth === 'password') document.getElementById('s-auth-pass').checked = true;
-    if (cfg.password) document.getElementById('s-password').value = cfg.password;
-    if (cfg.passphrase) document.getElementById('s-passphrase').value = cfg.passphrase;
-    if (!cfg.host) settings.classList.add('open'); // first run: guide to config
+    renderBookmarks();
+    const data = await sshurf.listProfiles();
+    profiles = data.profiles;
+    enabledId = data.enabledId;
+    if (!profiles.length) settings.classList.add('open'); // first run: guide to config
 })();

@@ -33,12 +33,10 @@ function createWindow() {
 
 // --- IPC ---
 
-ipcMain.handle('config:load', () => store.load() || {});
-
-ipcMain.handle('config:save', (_e, cfg) => {
-    store.save(cfg);
-    return true;
-});
+ipcMain.handle('profiles:list', () => store.load());
+ipcMain.handle('profiles:save', (_e, p) => store.saveProfile(p));
+ipcMain.handle('profiles:delete', (_e, id) => store.deleteProfile(id));
+ipcMain.handle('profiles:enable', (_e, id) => store.setEnabled(id));
 
 ipcMain.handle('key:pick', async () => {
     const r = await dialog.showOpenDialog(win, {
@@ -48,9 +46,9 @@ ipcMain.handle('key:pick', async () => {
     return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('tunnel:connect', (_e, cfg) => {
-    if (cfg) store.save(cfg);
-    tunnel.start(cfg || store.load());
+ipcMain.handle('tunnel:connect', () => {
+    const p = store.enabledProfile();
+    if (p) tunnel.start(p);
 });
 
 ipcMain.handle('tunnel:disconnect', () => tunnel.stop());
@@ -63,10 +61,10 @@ app.whenReady().then(() => {
 
     createWindow();
 
-    // Desktop is browse-only: auto-connect on launch when config is complete.
-    const cfg = store.load();
-    if (cfg && cfg.host && cfg.user && (cfg.password || cfg.keyPath)) {
-        tunnel.start(cfg);
+    // Desktop is browse-only: auto-connect on launch when a profile exists.
+    const p = store.enabledProfile();
+    if (p && p.host && p.user) {
+        tunnel.start(p);
     }
 
     app.on('activate', () => {
